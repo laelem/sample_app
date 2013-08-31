@@ -4,6 +4,92 @@ describe "User pages" do
 
   subject { page }
 
+  describe "Home page" do
+    let(:user) { FactoryGirl.create(:user) }
+    before do
+      sign_in user
+      FactoryGirl.create(:micropost, user: user, content: "Lorem ipsum")
+    end
+
+    describe "with one micropost" do
+      before { visit root_path }
+
+      it "should display the micropost counts in singular" do
+        expect(page).not_to have_content("#{user.feed.count} microposts")
+        expect(page).to have_content("#{user.feed.count} micropost")
+      end
+    end
+
+    describe "with two microposts" do
+      before do
+        FactoryGirl.create(:micropost, user: user, content: "Dolor sit amet")
+        visit root_path
+      end
+
+      it "should render the micropost counts in plural" do
+        expect(page).to have_content("#{user.feed.count} microposts")
+      end
+
+      it "should render the user's feed" do
+        user.feed.each do |item|
+          expect(page).to have_selector("li##{item.id}", text: item.content)
+        end
+      end
+
+      it "should render delete links only for microposts created by the current user" do
+        user.feed.each do |item|
+          if item.in? user.microposts.to_a
+            expect(page).to have_selector("li##{item.id} a", text: 'delete')
+          else
+            expect(page).not_to have_selector("li##{item.id} a", text: 'delete')
+          end
+        end
+      end
+    end
+
+    describe "user's feed pagination" do
+
+      before do
+        30.times { |i| FactoryGirl.create(:micropost, user: user, content: "Dolor sit amet #{i}") }
+        visit root_path
+      end
+
+      let(:first_page) { user.feed.paginate(page: 1) }
+      let(:second_page) { user.feed.paginate(page: 2) }
+
+      it { should have_link('Next') }
+      its(:html) { should match('>2</a>') }
+
+      it "should list each micropost" do
+        user.feed.to_a[0..29].each do |micropost|
+          page.should have_selector('li', text: micropost.content)
+        end
+      end
+
+      it "should list the first page of microposts" do
+        first_page.each do |micropost|
+          page.should have_selector('li', text: micropost.content)
+        end
+      end
+
+      it "should not list the second page of microposts" do
+        second_page.each do |micropost|
+          page.should_not have_selector('li', text: micropost.content)
+        end
+      end
+
+      describe "showing the second page" do
+        before { visit root_path(page: 2) }
+
+        it "should list the second page of microposts" do
+          second_page.each do |micropost|
+            page.should have_selector('li', text: micropost.content)
+          end
+        end
+      end
+    end
+  end
+
   describe "index" do
     let(:user) { FactoryGirl.create(:user) }
     before(:each) do
@@ -17,13 +103,39 @@ describe "User pages" do
     describe "pagination" do
 
       before(:all) { 30.times { FactoryGirl.create(:user) } }
-      after(:all)  { User.delete_all }
+      after(:all) { User.delete_all }
 
-      it { should have_selector('div.pagination') }
+      let(:first_page) { User.paginate(page: 1) }
+      let(:second_page) { User.paginate(page: 2) }
+
+      it { should have_link('Next') }
+      its(:html) { should match('>2</a>') }
 
       it "should list each user" do
-        User.paginate(page: 1).each do |user|
-          expect(page).to have_selector('li', text: user.name)
+        User.all[0..2].each do |user|
+          page.should have_selector('li', text: user.name)
+        end
+      end
+
+      it "should list the first page of users" do
+        first_page.each do |user|
+          page.should have_selector('li', text: user.name)
+        end
+      end
+
+      it "should not list the second page of users" do
+        second_page.each do |user|
+          page.should_not have_selector('li', text: user.name)
+        end
+      end
+
+      describe "showing the second page" do
+        before { visit users_path(page: 2) }
+
+        it "should list the second page of users" do
+          second_page.each do |user|
+            page.should have_selector('li', text: user.name)
+          end
         end
       end
     end
@@ -67,6 +179,48 @@ describe "User pages" do
       it { should have_content(m1.content) }
       it { should have_content(m2.content) }
       it { should have_content(user.microposts.count) }
+
+      describe "pagination" do
+
+        before do
+          29.times { |i| FactoryGirl.create(:micropost, user: user, content: "Lorem ipsum #{i}") }
+          visit user_path(user)
+        end
+
+        let(:first_page) { user.microposts.paginate(page: 1) }
+        let(:second_page) { user.microposts.paginate(page: 2) }
+
+        it { should have_link('Next') }
+        its(:html) { should match('>2</a>') }
+
+        it "should list each micropost" do
+          user.microposts.to_a[0..29].each do |micropost|
+            page.should have_selector('li', text: micropost.content)
+          end
+        end
+
+        it "should list the first page of microposts" do
+          first_page.each do |micropost|
+            page.should have_selector('li', text: micropost.content)
+          end
+        end
+
+        it "should not list the second page of microposts" do
+          second_page.each do |micropost|
+            page.should_not have_selector('li', text: micropost.content)
+          end
+        end
+
+        describe "showing the second page" do
+          before { visit user_path(id: user.id, page: 2) }
+
+          it "should list the second page of microposts" do
+            second_page.each do |micropost|
+              page.should have_selector('li', text: micropost.content)
+            end
+          end
+        end
+      end
     end
   end
 
